@@ -10,7 +10,7 @@ on:
       privacy:
         description: "YouTube privacy"
         required: false
-        default: "unlisted"
+        default: "public"
         type: choice
         options: [public, unlisted, private]
       music_theme:
@@ -25,7 +25,7 @@ on:
 jobs:
   create-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: 📥 Checkout
@@ -40,7 +40,7 @@ jobs:
       - name: ⚙️ Install system tools
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg fonts-dejavu-core imagemagick
+          sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-dejavu imagemagick
 
       - name: 📦 Install Python packages
         run: pip install -r requirements.txt
@@ -56,40 +56,35 @@ jobs:
           from pathlib import Path
           from google.oauth2.credentials import Credentials
 
-          secrets_str = os.environ["YT_CLIENT_SECRETS"]
-          refresh_token = os.environ["YT_REFRESH_TOKEN"]
-
-          app = json.loads(secrets_str)
+          app = json.loads(os.environ["YT_CLIENT_SECRETS"])
           app = app.get("installed") or app.get("web")
 
           creds = Credentials(
               token=None,
-              refresh_token=refresh_token,
+              refresh_token=os.environ["YT_REFRESH_TOKEN"],
               token_uri="https://oauth2.googleapis.com/token",
               client_id=app["client_id"],
               client_secret=app["client_secret"],
               scopes=["https://www.googleapis.com/auth/youtube.upload"],
           )
-
           Path("credentials").mkdir(exist_ok=True)
           with open("credentials/token.pickle", "wb") as f:
               pickle.dump(creds, f)
-
-          print("✅ Credentials built successfully")
+          print("✅ Credentials built")
           EOF
 
-      - name: 🎬 Generate & Upload
+      - name: 🎬 Generate & Upload Short
         run: |
           RHYME="${{ github.event.inputs.rhyme }}"
-          PRIVACY="${{ github.event.inputs.privacy || 'unlisted' }}"
+          PRIVACY="${{ github.event.inputs.privacy || 'public' }}"
           MUSIC="${{ github.event.inputs.music_theme || 'playful' }}"
           [ -z "$RHYME" ] && RHYME_FLAG="--random" || RHYME_FLAG="--rhyme $RHYME"
-          python main.py $RHYME_FLAG --music "$MUSIC" --output output/video.mp4 --upload --privacy "$PRIVACY"
+          python main.py $RHYME_FLAG --music "$MUSIC" --fps 30 --output output/video.mp4 --upload --privacy "$PRIVACY"
 
-      - name: 💾 Save video artifact
+      - name: 💾 Save artifact
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: cartoon-${{ github.run_number }}
+          name: shorts-${{ github.run_number }}
           path: output/video.mp4
           retention-days: 7
