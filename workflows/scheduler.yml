@@ -1,0 +1,102 @@
+name: 🎨 Auto Create & Upload Cartoon
+
+on:
+  schedule:
+    - cron: "0 10 * * *"   # Every day at 10:00 AM UTC
+  workflow_dispatch:
+    inputs:
+      rhyme:
+        description: "Rhyme name (empty = random)"
+        required: false
+        default: ""
+      privacy:
+        description: "YouTube privacy"
+        required: false
+        default: "public"
+        type: choice
+        options: [public, unlisted, private]
+      music_theme:
+        description: "Music theme"
+        required: false
+        default: "playful"
+        type: choice
+        options: [playful, dreamy, adventure, lullaby]
+
+jobs:
+  create-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: ⚙️ Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core imagemagick
+
+      - name: 📦 Install Python packages
+        run: pip install -r requirements.txt
+
+      - name: 🔐 Restore YouTube credentials
+        run: |
+          mkdir -p credentials
+          echo '${{ secrets.YT_CLIENT_SECRETS }}' > credentials/client_secrets.json
+          echo '${{ secrets.YT_TOKEN }}' | base64 --decode > credentials/token.pickle
+          if [ ! -s credentials/client_secrets.json ]; then
+            echo "❌ YT_CLIENT_SECRETS secret is missing!"
+            exit 1
+          fi
+          if [ ! -s credentials/token.pickle ]; then
+            echo "❌ YT_TOKEN secret is missing!"
+            exit 1
+          fi
+          echo "✅ Credentials restored"
+
+      - name: 🎬 Generate & Upload Cartoon
+        run: |
+          RHYME="${{ github.event.inputs.rhyme }}"
+          PRIVACY="${{ github.event.inputs.privacy || 'public' }}"
+          MUSIC="${{ github.event.inputs.music_theme || 'playful' }}"
+          
+          if [ -z "$RHYME" ]; then
+            RHYME_FLAG="--random"
+          else
+            RHYME_FLAG="--rhyme $RHYME"
+          fi
+
+          python main.py \
+            $RHYME_FLAG \
+            --music "$MUSIC" \
+            --output output/video.mp4 \
+            --upload \
+            --privacy "$PRIVACY"
+
+      - name: 💾 Save video as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cartoon-${{ github.run_number }}
+          path: output/video.mp4
+          retention-days: 7
+```
+
+**Step 4** — Click **Commit new file**
+
+---
+
+## PART 4 — Add YouTube Secrets
+
+This is the only part that needs your computer — just once.
+
+### Step 1 — Run the token script locally
+On your computer inside the project folder:
+```
+python token_refresh.py
