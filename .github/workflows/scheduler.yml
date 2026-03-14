@@ -45,35 +45,37 @@ jobs:
       - name: 📦 Install Python packages
         run: pip install -r requirements.txt
 
-      - name: 🔐 Build YouTube credentials from refresh token
+      - name: 🔐 Build YouTube credentials
+        env:
+          YT_CLIENT_SECRETS: ${{ secrets.YT_CLIENT_SECRETS }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
         run: |
           mkdir -p credentials
-          echo '${{ secrets.YT_CLIENT_SECRETS }}' > credentials/client_secrets.json
           python - << 'EOF'
-          import pickle, json
+          import os, json, pickle
+          from pathlib import Path
           from google.oauth2.credentials import Credentials
 
-          with open("credentials/client_secrets.json") as f:
-              data = json.load(f)
+          secrets_str = os.environ["YT_CLIENT_SECRETS"]
+          refresh_token = os.environ["YT_REFRESH_TOKEN"]
 
-          app = data.get("installed") or data.get("web")
+          app = json.loads(secrets_str)
+          app = app.get("installed") or app.get("web")
 
           creds = Credentials(
               token=None,
-              refresh_token="${{ secrets.YT_REFRESH_TOKEN }}",
+              refresh_token=refresh_token,
               token_uri="https://oauth2.googleapis.com/token",
               client_id=app["client_id"],
               client_secret=app["client_secret"],
-              scopes=[
-                  "https://www.googleapis.com/auth/youtube.upload",
-                  "https://www.googleapis.com/auth/youtube",
-              ],
+              scopes=["https://www.googleapis.com/auth/youtube.upload"],
           )
 
+          Path("credentials").mkdir(exist_ok=True)
           with open("credentials/token.pickle", "wb") as f:
               pickle.dump(creds, f)
 
-          print("✅ Credentials built from refresh token")
+          print("✅ Credentials built successfully")
           EOF
 
       - name: 🎬 Generate & Upload
