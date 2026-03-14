@@ -29,9 +29,8 @@ PRIVACY_OPTS = ["public", "unlisted", "private"]
 @click.option("--list",      "show_list", is_flag=True)
 @click.option("--voice",     default="uk_girl", type=click.Choice(list(KIDS_VOICES.keys())))
 @click.option("--music",     "music_theme", default="playful", type=click.Choice(MUSIC_THEMES))
-@click.option("--music-volume", default=0.15, type=float)
-@click.option("--no-ai",     is_flag=True)
-@click.option("--fps",       default=24, type=int)
+@click.option("--music-volume", default=0.18, type=float)
+@click.option("--fps",       default=30, type=int)
 @click.option("--output",    "-o", default=None)
 @click.option("--upload",    is_flag=True)
 @click.option("--privacy",   default="public", type=click.Choice(PRIVACY_OPTS))
@@ -41,9 +40,9 @@ PRIVACY_OPTS = ["public", "unlisted", "private"]
 @click.option("--yt-info",   is_flag=True)
 @click.option("--yt-logout", is_flag=True)
 def main(rhyme, use_random, text, title, show_list, voice, music_theme,
-         music_volume, no_ai, fps, output, upload, privacy, yt_description,
+         music_volume, fps, output, upload, privacy, yt_description,
          yt_tags, yt_not_for_kids, yt_info, yt_logout):
-    """🎨 Kids Cartoon Maker — 100% free cartoon videos auto-uploaded to YouTube."""
+    """🎨 Kids Cartoon Maker — Animated YouTube Shorts, 100% free."""
 
     if yt_logout:
         revoke_credentials(); return
@@ -72,57 +71,76 @@ def main(rhyme, use_random, text, title, show_list, voice, music_theme,
     elif rhyme:
         selected = get_rhyme(rhyme)
         if not selected:
-            click.echo(f"❌ Rhyme '{rhyme}' not found. Use --list.", err=True); sys.exit(1)
+            click.echo(f"❌ Rhyme '{rhyme}' not found. Use --list.", err=True)
+            sys.exit(1)
         click.echo(f"🎵 {selected.title}")
     else:
-        click.echo("❌ Use --rhyme, --random, or --text. Use --list to see options.", err=True)
+        click.echo("❌ Use --rhyme, --random, or --text.", err=True)
         sys.exit(1)
 
     safe_name   = selected.name.replace(" ", "_").lower()
     output_path = output or str(OUTPUT_DIR / f"{safe_name}.mp4")
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
+    # Add #Shorts to title for YouTube
+    yt_title = f"{selected.title} #Shorts"
+
     with tempfile.TemporaryDirectory(prefix="kids_cartoon_") as tmpdir:
-        img_dir    = os.path.join(tmpdir, "images")
         audio_dir  = os.path.join(tmpdir, "audio")
         music_path = os.path.join(tmpdir, "music.mp3")
+        img_dir    = os.path.join(tmpdir, "images")   # kept for API compat
 
-        click.echo(f"\n{'─'*50}")
-        click.echo(f"🎬 {selected.title}  ({len(selected.scenes)} scenes)")
-        click.echo(f"{'─'*50}\n")
+        click.echo(f"\n{'─'*52}")
+        click.echo(f"🎬 {selected.title}  |  Shorts 1080×1920")
+        click.echo(f"   Scenes : {len(selected.scenes)}")
+        click.echo(f"   Music  : {music_theme}")
+        click.echo(f"{'─'*52}\n")
 
-        click.echo("Step 1/4 — Images  [Pollinations.ai — free, no key]")
-        image_files = generate_scene_images(selected.scenes, img_dir, use_ai=not no_ai)
+        click.echo("Step 1/4 — Generating voice narration...")
+        audio_files = generate_scene_audio(
+            selected.scenes, audio_dir, voice=KIDS_VOICES[voice]
+        )
 
-        click.echo("\nStep 2/4 — Voice  [edge-tts — free]")
-        audio_files = generate_scene_audio(selected.scenes, audio_dir, voice=KIDS_VOICES[voice])
-
-        click.echo("\nStep 3/4 — Music  [procedural — no API]")
+        click.echo("\nStep 2/4 — Generating music...")
         total_dur = sum(max(s.duration_seconds, 3.5) for s in selected.scenes) + 8
         generate_music_for_video(total_dur, music_path, music_theme)
 
-        click.echo("\nStep 4/4 — Assemble video  [moviepy — free]")
-        assemble_video(selected.scenes, image_files, audio_files, music_path,
-                       output_path, selected.title, music_volume, fps)
+        click.echo("\nStep 3/4 — Generating placeholder images (animation is procedural)...")
+        image_files = generate_scene_images(selected.scenes, img_dir, use_ai=False)
+
+        click.echo("\nStep 4/4 — Rendering animated Shorts video...")
+        assemble_video(
+            scenes=selected.scenes,
+            image_files=image_files,
+            audio_files=audio_files,
+            music_path=music_path,
+            output_path=output_path,
+            rhyme_title=selected.title,
+            rhyme_name=selected.name,
+            music_volume=music_volume,
+            fps=fps,
+        )
 
     size_mb = os.path.getsize(output_path) / 1_000_000
-    click.echo(f"\n🎉 Video ready:  {output_path}  ({size_mb:.1f} MB)\n")
+    click.echo(f"\n🎉 Shorts ready: {output_path}  ({size_mb:.1f} MB)\n")
 
     if upload:
-        click.echo("📺 Uploading to YouTube  [YouTube Data API — free]\n")
+        click.echo("📺 Uploading to YouTube as Short...\n")
         extra_tags = [t.strip() for t in yt_tags.split(",")] if yt_tags else []
+        extra_tags += ["shorts", "youtubeshorts", "kidsshorts"]
         try:
-            result = upload_video(output_path, selected.title, yt_description,
-                                  extra_tags, privacy, not yt_not_for_kids)
+            result = upload_video(
+                output_path, yt_title, yt_description,
+                extra_tags, privacy, not yt_not_for_kids
+            )
             click.echo(f"\n🚀 Live on YouTube!")
-            click.echo(f"   {result['url']}")
-            click.echo(f"   Privacy: {result['privacy']}\n")
+            click.echo(f"   {result['url']}\n")
         except FileNotFoundError as e:
             click.echo(str(e), err=True); sys.exit(1)
         except Exception as e:
             click.echo(f"❌ Upload failed: {e}", err=True); sys.exit(1)
     else:
-        click.echo("💡 Add --upload to post to YouTube automatically!\n")
+        click.echo("💡 Add --upload to post to YouTube!\n")
 
 
 if __name__ == "__main__":
