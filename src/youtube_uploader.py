@@ -74,4 +74,78 @@ def upload_video(video_path, title, description=None, tags=None,
         description = (
             f"🎨 {title}\n\nA fun cartoon for kids! 🌟\n\n"
             f"Watch and sing along to this classic nursery rhyme.\n\n"
-            f"#KidsCartoon #NurseryRhymes #KidsSong
+            f"#KidsCartoon #NurseryRhymes #KidsSongs #ChildrensEducation"
+        )
+
+    all_tags = list(set((tags or []) + KIDS_TAGS))
+    body = {
+        "snippet": {"title": title, "description": description,
+                    "tags": all_tags, "categoryId": category_id,
+                    "defaultLanguage": "en", "defaultAudioLanguage": "en"},
+        "status": {"privacyStatus": privacy, "selfDeclaredMadeForKids": made_for_kids,
+                   "embeddable": True},
+    }
+
+    print("  🔐 Authenticating with YouTube...")
+    youtube = get_youtube_client()
+    size_mb = os.path.getsize(video_path) / 1_000_000
+    print(f"  📤 Uploading: {os.path.basename(video_path)} ({size_mb:.1f} MB)")
+
+    media = MediaFileUpload(video_path, mimetype="video/mp4",
+                            chunksize=CHUNK_SIZE, resumable=True)
+    request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
+
+    response = None
+    retry = 0
+    while response is None:
+        try:
+            status, response = request.next_chunk()
+            if status:
+                pct = int(status.progress() * 100)
+                bar = "█" * (pct//5) + "░" * (20 - pct//5)
+                print(f"\r  ⬆️  [{bar}] {pct}%", end="", flush=True)
+        except HttpError as e:
+            if e.resp.status in [500, 502, 503, 504] and retry < 10:
+                retry += 1
+                wait = 2 ** retry
+                print(f"\n  ⚠️  Retry {retry}/10 in {wait}s...")
+                time.sleep(wait)
+            else:
+                raise
+
+    print()
+    video_id = response["id"]
+    url = f"https://www.youtube.com/watch?v={video_id}"
+
+    if thumbnail_path and os.path.exists(thumbnail_path):
+        try:
+            youtube.thumbnails().set(videoId=video_id,
+                                     media_body=MediaFileUpload(thumbnail_path, mimetype="image/png")
+                                     ).execute()
+        except Exception:
+            pass
+
+    print(f"  🎉 Uploaded! {url}")
+    return {"video_id": video_id, "url": url, "title": response["snippet"]["title"],
+            "privacy": response["status"]["privacyStatus"], "status": "uploaded"}
+
+
+def get_channel_info():
+    _check_deps()
+    youtube = get_youtube_client()
+    response = youtube.channels().list(part="snippet,statistics", mine=True).execute()
+    if response.get("items"):
+        ch = response["items"][0]
+        return {"name": ch["snippet"]["title"], "id": ch["id"],
+                "url": f"https://www.youtube.com/channel/{ch['id']}",
+                "subscribers": ch["statistics"].get("subscriberCount", "hidden"),
+                "videos": ch["statistics"].get("videoCount", "0")}
+    return {}
+
+
+def revoke_credentials():
+    if TOKEN_FILE.exists():
+        TOKEN_FILE.unlink()
+        print("✅ YouTube credentials removed.")
+    else:
+        print("ℹ️  No credentials found.")
