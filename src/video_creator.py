@@ -101,8 +101,8 @@ def create_title_card(title, duration=3.0, fps=24, width=768, height=512):
 
 
 def assemble_video(scenes, image_files, audio_files, music_path, output_path,
-                   rhyme_title="Kids Cartoon", music_volume=0.15, fps=24,
-                   min_scene_duration=3.0):
+                   rhyme_title="Kids Cartoon", rhyme_name="custom",
+                   music_volume=0.18, fps=FPS, min_scene_duration=3.5):
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     print(f"\n🎬 Assembling: {rhyme_title}")
