@@ -1,0 +1,91 @@
+name: 🎨 Auto Create & Upload Cartoon
+
+on:
+  schedule:
+    - cron: "0 10 * * *"    # Every day at 10:00 AM UTC
+  workflow_dispatch:
+    inputs:
+      rhyme:
+        description: "Rhyme name (empty = random)"
+        required: false
+        default: ""
+      privacy:
+        description: "YouTube privacy"
+        required: false
+        default: "public"
+        type: choice
+        options: [public, unlisted, private]
+      music_theme:
+        description: "Music theme"
+        required: false
+        default: "playful"
+        type: choice
+        options: [playful, dreamy, adventure, lullaby]
+
+jobs:
+  create-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: ⚙️ Install system tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-dejavu-core imagemagick
+
+      - name: 📦 Install Python packages
+        run: pip install -r requirements.txt
+
+      - name: 🔐 Restore YouTube credentials
+        run: |
+          mkdir -p credentials
+          echo '${{ secrets.YT_CLIENT_SECRETS }}' > credentials/client_secrets.json
+          echo '${{ secrets.YT_TOKEN }}' | base64 --decode > credentials/token.pickle
+          [ -s credentials/client_secrets.json ] || { echo "❌ YT_CLIENT_SECRETS missing!"; exit 1; }
+          [ -s credentials/token.pickle ]        || { echo "❌ YT_TOKEN missing!"; exit 1; }
+          echo "✅ Credentials ready"
+
+      - name: 🎬 Generate & Upload
+        run: |
+          RHYME="${{ github.event.inputs.rhyme }}"
+          PRIVACY="${{ github.event.inputs.privacy || 'public' }}"
+          MUSIC="${{ github.event.inputs.music_theme || 'playful' }}"
+          [ -z "$RHYME" ] && RHYME_FLAG="--random" || RHYME_FLAG="--rhyme $RHYME"
+          python main.py $RHYME_FLAG --music "$MUSIC" --output output/video.mp4 --upload --privacy "$PRIVACY"
+
+      - name: 💾 Save video artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cartoon-${{ github.run_number }}
+          path: output/video.mp4
+          retention-days: 7
+```
+
+---
+
+## 📄 `requirements.txt`
+```
+edge-tts>=6.1.9
+moviepy>=1.0.3
+Pillow>=10.0.0
+requests>=2.31.0
+numpy>=1.24.0
+pydub>=0.25.1
+click>=8.1.7
+aiohttp>=3.9.0
+aiofiles>=23.2.1
+tqdm>=4.66.0
+python-dotenv>=1.0.0
+google-api-python-client>=2.100.0
+google-auth-oauthlib>=1.1.0
+google-auth-httplib2>=0.1.1
