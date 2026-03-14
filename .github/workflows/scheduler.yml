@@ -69,45 +69,4 @@ jobs:
           name: cartoon-${{ github.run_number }}
           path: output/video.mp4
           retention-days: 7
-```
 
-**Step 4** — Scroll down → click **Commit new file**
-
----
-
-## CHECK 2 — Enable Actions on Your Repo
-
-**Step 1** — Click the **Actions** tab on your repo
-
-**Step 2** — If you see a green button saying **"I understand my workflows, go ahead and enable them"** → click it
-
-**Step 3** — Refresh the page — you should now see **"🎨 Auto Create & Upload Cartoon"** in the left sidebar
-
----
-
-## CHECK 3 — Run It Manually
-
-**Step 1** — Click **Actions** tab
-
-**Step 2** — Click **"🎨 Auto Create & Upload Cartoon"** in the left sidebar
-
-**Step 3** — Click the **"Run workflow"** dropdown button on the right
-
-**Step 4** — It looks like this — fill it in and click the green button:
-```
-┌─────────────────────────────────────────┐
-│  Run workflow                           │
-│                                         │
-│  Branch: main                    ▼      │
-│                                         │
-│  Rhyme name (empty = random)            │
-│  [ twinkle                    ]         │
-│                                         │
-│  YouTube privacy                        │
-│  [ unlisted               ▼ ]          │
-│                                         │
-│  Music theme                            │
-│  [ playful                ▼ ]          │
-│                                         │
-│       [ Run workflow ]                  │
-└─────────────────────────────────────────┘
