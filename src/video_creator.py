@@ -31,8 +31,6 @@ def create_scene_clip(image_path, audio_path, music_path, music_start,
     clip_duration = max(speech_duration + 0.5, min_duration)
 
     video = ImageClip(image_path, duration=clip_duration)
-    zoom_end = 1.08
-    video = video.resize(lambda t: 1 + (zoom_end - 1) * (t / clip_duration))
     video = video.set_position("center").set_fps(fps)
 
     try:
