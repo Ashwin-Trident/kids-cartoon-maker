@@ -45,14 +45,36 @@ jobs:
       - name: 📦 Install Python packages
         run: pip install -r requirements.txt
 
-      - name: 🔐 Restore YouTube credentials
+      - name: 🔐 Build YouTube credentials from refresh token
         run: |
           mkdir -p credentials
           echo '${{ secrets.YT_CLIENT_SECRETS }}' > credentials/client_secrets.json
-          echo '${{ secrets.YT_TOKEN }}' | base64 --decode > credentials/token.pickle
-          [ -s credentials/client_secrets.json ] || { echo "❌ YT_CLIENT_SECRETS missing!"; exit 1; }
-          [ -s credentials/token.pickle ] || { echo "❌ YT_TOKEN missing!"; exit 1; }
-          echo "✅ Credentials ready"
+          python - << 'EOF'
+          import pickle, json
+          from google.oauth2.credentials import Credentials
+
+          with open("credentials/client_secrets.json") as f:
+              data = json.load(f)
+
+          app = data.get("installed") or data.get("web")
+
+          creds = Credentials(
+              token=None,
+              refresh_token="${{ secrets.YT_REFRESH_TOKEN }}",
+              token_uri="https://oauth2.googleapis.com/token",
+              client_id=app["client_id"],
+              client_secret=app["client_secret"],
+              scopes=[
+                  "https://www.googleapis.com/auth/youtube.upload",
+                  "https://www.googleapis.com/auth/youtube",
+              ],
+          )
+
+          with open("credentials/token.pickle", "wb") as f:
+              pickle.dump(creds, f)
+
+          print("✅ Credentials built from refresh token")
+          EOF
 
       - name: 🎬 Generate & Upload
         run: |
@@ -69,4 +91,3 @@ jobs:
           name: cartoon-${{ github.run_number }}
           path: output/video.mp4
           retention-days: 7
-
